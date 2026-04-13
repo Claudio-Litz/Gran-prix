@@ -3,962 +3,507 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Roteirização Dinâmica — Terminal Ponta da Madeira (Vale)</title>
+  <title>TMPM — Roteamento Dinâmico</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
-    /* =========================================================
-       RESET & TOKENS
-    ========================================================= */
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@400;600;700&display=swap');
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg-page:       #0f1117;
-      --bg-panel:      #161b27;
-      --bg-surface:    #1e2535;
-      --bg-hover:      #252d40;
-      --border:        rgba(255,255,255,0.08);
-      --border-strong: rgba(255,255,255,0.18);
-
-      --text-primary:   #e8eaf0;
-      --text-secondary: #8891a8;
-      --text-muted:     #525d73;
-
-      --accent-teal:    #1fcb8f;
-      --accent-teal-bg: rgba(31,203,143,0.12);
-      --accent-orange:  #f5703a;
-      --accent-orange-bg: rgba(245,112,58,0.12);
-      --accent-blue:    #4a9eff;
-      --accent-blue-bg: rgba(74,158,255,0.10);
-      --accent-blue-visited: rgba(74,158,255,0.22);
-
-      --cell-free:      #1a2030;
-      --cell-block:     #0a0c10;
-      --cell-grid-line: rgba(255,255,255,0.05);
-
-      --radius-sm: 6px;
-      --radius-md: 10px;
-      --radius-lg: 14px;
-
-      --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      --font-mono: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      --bg: #0a0f14;
+      --panel-bg: rgba(8, 16, 24, 0.92);
+      --border: #1a3a52;
+      --accent: #00c8ff;
+      --accent2: #00ff9d;
+      --danger: #ff3d57;
+      --text: #cde8f5;
+      --muted: #5a8099;
+      --edge-free: #3388ff;
+      --edge-blocked: #ff3d57;
+      --route: #00ff9d;
+      --mono: 'Share Tech Mono', monospace;
+      --sans: 'Barlow Condensed', sans-serif;
     }
 
-    html, body {
-      height: 100%;
-      background: var(--bg-page);
-      color: var(--text-primary);
-      font-family: var(--font);
-      font-size: 14px;
-      line-height: 1.5;
+    html, body { height: 100%; width: 100%; overflow: hidden; background: var(--bg); }
+
+    #map {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      filter: saturate(0.7) brightness(0.85);
     }
 
-    /* =========================================================
-       LAYOUT
-    ========================================================= */
-    #app {
-      display: grid;
-      grid-template-columns: 280px 1fr;
-      grid-template-rows: auto 1fr;
-      grid-template-areas:
-        "header header"
-        "sidebar main";
-      min-height: 100vh;
-      gap: 0;
-    }
-
-    /* =========================================================
-       HEADER
-    ========================================================= */
-    #header {
-      grid-area: header;
-      background: var(--bg-panel);
-      border-bottom: 1px solid var(--border);
-      padding: 14px 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-    }
-
-    .header-brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .header-logo {
-      width: 34px;
-      height: 34px;
-      background: var(--accent-teal);
-      border-radius: var(--radius-sm);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .header-logo svg { display: block; }
-
-    .header-title {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text-primary);
-      letter-spacing: -0.01em;
-    }
-
-    .header-sub {
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-top: 1px;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-
-    .header-stats {
-      display: flex;
-      gap: 6px;
-    }
-
-    .hstat {
-      background: var(--bg-surface);
+    /* ── PANEL ── */
+    #panel {
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      z-index: 999;
+      width: 290px;
+      background: var(--panel-bg);
       border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 5px 12px;
-      text-align: center;
+      border-radius: 4px;
+      backdrop-filter: blur(12px);
+      overflow: hidden;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,200,255,0.08);
     }
 
-    .hstat-val {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--text-primary);
-      font-variant-numeric: tabular-nums;
-      font-family: var(--font-mono);
+    #panel-header {
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0,200,255,0.04);
     }
 
-    .hstat-label {
+    #panel-header .label {
+      font-family: var(--mono);
       font-size: 10px;
-      color: var(--text-muted);
+      letter-spacing: 0.18em;
+      color: var(--accent);
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      margin-bottom: 2px;
     }
 
-    /* =========================================================
-       SIDEBAR
-    ========================================================= */
-    #sidebar {
-      grid-area: sidebar;
-      background: var(--bg-panel);
-      border-right: 1px solid var(--border);
-      padding: 20px 16px;
+    #panel-header h1 {
+      font-family: var(--sans);
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--text);
+      text-transform: uppercase;
+    }
+
+    #panel-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+    .field label {
+      display: block;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+
+    .field select {
+      width: 100%;
+      background: rgba(0,200,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      padding: 7px 10px;
+      appearance: none;
+      -webkit-appearance: none;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      outline: none;
+    }
+
+    .field select:focus {
+      border-color: var(--accent);
+      background: rgba(0,200,255,0.09);
+    }
+
+    .field select option { background: #0d1e2e; color: var(--text); }
+
+    #divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
+      margin: 0 -16px;
+    }
+
+    #status-bar {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      min-height: 18px;
+      transition: color 0.3s;
+      padding-top: 2px;
+    }
+
+    #status-bar.ok { color: var(--accent2); }
+    #status-bar.err { color: var(--danger); }
+    #status-bar.idle { color: var(--muted); }
+
+    /* ── LEGEND ── */
+    #legend {
+      position: absolute;
+      bottom: 28px;
+      left: 18px;
+      z-index: 999;
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px 14px;
+      backdrop-filter: blur(10px);
       display: flex;
       flex-direction: column;
-      gap: 20px;
-      overflow-y: auto;
-    }
-
-    .section-label {
-      font-size: 10px;
-      font-weight: 600;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      margin-bottom: 10px;
-    }
-
-    /* --- Grid size control --- */
-    .slider-wrap {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .slider-wrap input[type=range] {
-      flex: 1;
-      -webkit-appearance: none;
-      height: 4px;
-      background: var(--bg-surface);
-      border-radius: 2px;
-      outline: none;
-      cursor: pointer;
-    }
-
-    .slider-wrap input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      background: var(--accent-blue);
-      border: 2px solid var(--bg-panel);
-      cursor: pointer;
-    }
-
-    .slider-wrap input[type=range]::-moz-range-thumb {
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      background: var(--accent-blue);
-      border: 2px solid var(--bg-panel);
-      cursor: pointer;
-    }
-
-    .slider-val {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--text-secondary);
-      min-width: 44px;
-      text-align: right;
-    }
-
-    /* --- Tool buttons --- */
-    .tool-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
       gap: 6px;
     }
 
-    .tool-btn {
+    .leg-item {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 9px 12px;
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      color: var(--text-secondary);
-      font-size: 13px;
-      font-family: var(--font);
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s, color 0.15s;
-      text-align: left;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      text-transform: uppercase;
     }
 
-    .tool-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-
-    .tool-btn.active-block  { background: rgba(10,12,16,0.6); border-color: #525d73; color: var(--text-primary); }
-    .tool-btn.active-start  { background: var(--accent-teal-bg); border-color: var(--accent-teal); color: var(--accent-teal); }
-    .tool-btn.active-end    { background: var(--accent-orange-bg); border-color: var(--accent-orange); color: var(--accent-orange); }
-    .tool-btn.active-erase  { background: var(--accent-blue-bg); border-color: var(--accent-blue); color: var(--accent-blue); }
-
-    .tool-icon {
-      width: 14px;
-      height: 14px;
-      border-radius: 3px;
+    .leg-line {
+      width: 28px;
+      height: 3px;
+      border-radius: 2px;
       flex-shrink: 0;
     }
 
-    /* --- Action buttons --- */
-    .action-btn {
-      width: 100%;
-      padding: 9px 14px;
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      color: var(--text-secondary);
-      font-size: 13px;
-      font-family: var(--font);
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    /* ── TOOLTIP OVERRIDE ── */
+    .leaflet-tooltip {
+      background: var(--panel-bg) !important;
+      border: 1px solid var(--border) !important;
+      color: var(--accent) !important;
+      font-family: var(--mono) !important;
+      font-size: 11px !important;
+      letter-spacing: 0.1em !important;
+      border-radius: 3px !important;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5) !important;
+      padding: 4px 8px !important;
+      white-space: nowrap !important;
     }
 
-    .action-btn:hover {
-      background: rgba(229,57,53,0.12);
-      border-color: #c62828;
-      color: #ef9a9a;
+    .leaflet-tooltip::before { display: none !important; }
+
+    /* ── ATTRIBUTION ── */
+    .leaflet-control-attribution { font-size: 9px; opacity: 0.4; }
+
+    /* ── SCAN LINE OVERLAY ── */
+    #overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 200, 255, 0.012) 2px,
+        rgba(0, 200, 255, 0.012) 4px
+      );
     }
 
-    /* --- Legend --- */
-    .legend-list { display: flex; flex-direction: column; gap: 7px; }
-
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 9px;
-      font-size: 12px;
-      color: var(--text-secondary);
+    /* ── PULSE NODE ── */
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.3); }
     }
 
-    .legend-swatch {
-      width: 14px;
-      height: 14px;
-      border-radius: 3px;
-      flex-shrink: 0;
-    }
-
-    /* --- Algorithm info --- */
-    .algo-card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 12px;
-    }
-
-    .algo-name {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--accent-blue);
-      margin-bottom: 6px;
-    }
-
-    .algo-desc {
-      font-size: 11px;
-      color: var(--text-muted);
-      line-height: 1.6;
-    }
-
-    /* =========================================================
-       MAIN / CANVAS AREA
-    ========================================================= */
-    #main {
-      grid-area: main;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    #canvas-area {
-      flex: 1;
-      overflow: auto;
-      padding: 24px;
-      display: flex;
-      align-items: flex-start;
-      justify-content: flex-start;
-    }
-
-    #grid-canvas {
-      display: block;
-      cursor: crosshair;
-      border-radius: var(--radius-sm);
-      image-rendering: pixelated;
-      box-shadow: 0 0 0 1px var(--border);
-    }
-
-    /* --- Status bar --- */
-    #statusbar {
-      background: var(--bg-panel);
-      border-top: 1px solid var(--border);
-      padding: 10px 24px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 12px;
-      color: var(--text-secondary);
-      min-height: 42px;
-    }
-
-    #statusbar .status-dot {
-      width: 7px;
-      height: 7px;
+    .node-marker-inner {
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
-      background: var(--text-muted);
-      flex-shrink: 0;
-      transition: background 0.2s;
-    }
-
-    #statusbar.ok .status-dot   { background: var(--accent-teal); }
-    #statusbar.err .status-dot  { background: var(--accent-orange); }
-    #statusbar.info .status-dot { background: var(--accent-blue); }
-
-    #status-text { flex: 1; }
-
-    /* =========================================================
-       RESPONSIVE — telas menores
-    ========================================================= */
-    @media (max-width: 720px) {
-      #app {
-        grid-template-columns: 1fr;
-        grid-template-areas: "header" "sidebar" "main";
-      }
-      #sidebar { border-right: none; border-bottom: 1px solid var(--border); }
+      background: var(--accent);
+      border: 2px solid rgba(0,200,255,0.5);
+      box-shadow: 0 0 8px var(--accent);
+      animation: pulse 2.6s ease-in-out infinite;
     }
   </style>
 </head>
 <body>
+  <div id="map"></div>
+  <div id="overlay"></div>
 
-<div id="app">
-
-  <!-- ===== HEADER ===== -->
-  <header id="header">
-    <div class="header-brand">
-      <div class="header-logo">
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-          <path d="M3 10 L10 3 L17 10 L10 17 Z" fill="#0f1117" opacity="0.9"/>
-          <circle cx="10" cy="10" r="3" fill="#0f1117"/>
-          <path d="M10 3 L10 7 M10 13 L10 17 M3 10 L7 10 M13 10 L17 10" stroke="#0f1117" stroke-width="1.5"/>
-        </svg>
-      </div>
-      <div>
-        <div class="header-title">Sistema de Roteirização Dinâmica</div>
-        <div class="header-sub">Terminal Portuário de Ponta da Madeira — Vale S.A.</div>
-      </div>
+  <div id="panel">
+    <div id="panel-header">
+      <div class="label">Terminal Marítimo · TMPM</div>
+      <h1>Roteamento A*</h1>
     </div>
-    <div class="header-stats">
-      <div class="hstat">
-        <div class="hstat-val" id="stat-dist">—</div>
-        <div class="hstat-label">Distância</div>
+    <div id="panel-body">
+      <div class="field">
+        <label>Partida</label>
+        <select id="sel-origin"></select>
       </div>
-      <div class="hstat">
-        <div class="hstat-val" id="stat-visited">—</div>
-        <div class="hstat-label">Nós A*</div>
+      <div class="field">
+        <label>Chegada</label>
+        <select id="sel-dest"></select>
       </div>
-      <div class="hstat">
-        <div class="hstat-val" id="stat-blocked">0</div>
-        <div class="hstat-label">Bloqueios</div>
-      </div>
-      <div class="hstat">
-        <div class="hstat-val" id="stat-grid">20×20</div>
-        <div class="hstat-label">Grid</div>
-      </div>
+      <div id="divider"></div>
+      <div id="status-bar" class="idle">AGUARDANDO SELEÇÃO…</div>
     </div>
-  </header>
+  </div>
 
-  <!-- ===== SIDEBAR ===== -->
-  <aside id="sidebar">
+  <div id="legend">
+    <div class="leg-item"><div class="leg-line" style="background:#3388ff"></div>Via livre</div>
+    <div class="leg-item"><div class="leg-line" style="background:#ff3d57"></div>Via bloqueada</div>
+    <div class="leg-item"><div class="leg-line" style="background:#00ff9d"></div>Rota calculada</div>
+  </div>
 
-    <div>
-      <div class="section-label">Tamanho do grid</div>
-      <div class="slider-wrap">
-        <input type="range" id="size-slider" min="10" max="50" value="20" step="1" />
-        <span class="slider-val" id="size-label">20×20</span>
-      </div>
-    </div>
+  <script>
+  /* ══════════════════════════════════════════════
+     1. GRAFO GEOGRÁFICO — TMPM, São Luís / MA
+     Coordenadas mockadas dentro do perímetro do
+     Terminal Marítimo de Ponta da Madeira
+  ══════════════════════════════════════════════ */
+  const nodes = [
+    { id: 0, name: 'Portaria Principal',     lat: -2.5645, lng: -44.3785 },
+    { id: 1, name: 'Pátio de Triagem',       lat: -2.5652, lng: -44.3762 },
+    { id: 2, name: 'Cais Norte',             lat: -2.5630, lng: -44.3748 },
+    { id: 3, name: 'Cais Sul',               lat: -2.5672, lng: -44.3745 },
+    { id: 4, name: 'Área de Manutenção',     lat: -2.5660, lng: -44.3720 },
+    { id: 5, name: 'Silo de Minério A',      lat: -2.5640, lng: -44.3700 },
+    { id: 6, name: 'Silo de Minério B',      lat: -2.5665, lng: -44.3695 },
+    { id: 7, name: 'Ponto de Embarque',      lat: -2.5648, lng: -44.3670 },
+  ];
 
-    <div>
-      <div class="section-label">Ferramentas de edição</div>
-      <div class="tool-grid">
-        <button class="tool-btn active-block" data-tool="block">
-          <span class="tool-icon" style="background:#0a0c10; border:1px solid #525d73;"></span>
-          Bloqueio
-        </button>
-        <button class="tool-btn" data-tool="start">
-          <span class="tool-icon" style="background:var(--accent-teal); border-radius:50%;"></span>
-          Ponto A
-        </button>
-        <button class="tool-btn" data-tool="end">
-          <span class="tool-icon" style="background:var(--accent-orange); border-radius:50%;"></span>
-          Ponto B
-        </button>
-        <button class="tool-btn" data-tool="erase">
-          <span class="tool-icon" style="background:transparent; border:1px solid #525d73;"></span>
-          Apagar
-        </button>
-      </div>
-    </div>
+  const edges = [
+    { id: 0, source: 0, target: 1, isBlocked: false },
+    { id: 1, source: 1, target: 2, isBlocked: false },
+    { id: 2, source: 1, target: 3, isBlocked: false },
+    { id: 3, source: 2, target: 4, isBlocked: false },
+    { id: 4, source: 3, target: 4, isBlocked: false },
+    { id: 5, source: 4, target: 5, isBlocked: false },
+    { id: 6, source: 4, target: 6, isBlocked: false },
+    { id: 7, source: 5, target: 7, isBlocked: false },
+    { id: 8, source: 6, target: 7, isBlocked: false },
+    { id: 9, source: 2, target: 3, isBlocked: false },
+    { id:10, source: 5, target: 6, isBlocked: false },
+  ];
 
-    <div>
-      <div class="section-label">Ações</div>
-      <button class="action-btn" id="clear-btn">Limpar tudo</button>
-    </div>
-
-    <div>
-      <div class="section-label">Legenda</div>
-      <div class="legend-list">
-        <div class="legend-item">
-          <div class="legend-swatch" style="background:#1a2030; border:1px solid rgba(255,255,255,0.1);"></div>
-          Célula livre
-        </div>
-        <div class="legend-item">
-          <div class="legend-swatch" style="background:#0a0c10; border:1px solid #525d73;"></div>
-          Bloqueio / obstáculo
-        </div>
-        <div class="legend-item">
-          <div class="legend-swatch" style="background:var(--accent-teal); border-radius:50%;"></div>
-          Ponto A — origem
-        </div>
-        <div class="legend-item">
-          <div class="legend-swatch" style="background:var(--accent-orange); border-radius:50%;"></div>
-          Ponto B — destino
-        </div>
-        <div class="legend-item">
-          <div class="legend-swatch" style="background:var(--accent-blue);"></div>
-          Rota calculada (A*)
-        </div>
-        <div class="legend-item">
-          <div class="legend-swatch" style="background:var(--accent-blue-visited);"></div>
-          Nós explorados
-        </div>
-      </div>
-    </div>
-
-    <div>
-      <div class="section-label">Algoritmo</div>
-      <div class="algo-card">
-        <div class="algo-name">A* (A-Star)</div>
-        <div class="algo-desc">
-          Heurística Manhattan. Lê <code style="color:var(--accent-blue)">node.weight</code>
-          para custo de travessia — preparado para tipos de veículo e tráfego dinâmico.
-        </div>
-      </div>
-    </div>
-
-  </aside>
-
-  <!-- ===== MAIN ===== -->
-  <main id="main">
-    <div id="canvas-area">
-      <canvas id="grid-canvas"></canvas>
-    </div>
-    <div id="statusbar" class="info">
-      <div class="status-dot"></div>
-      <span id="status-text">Selecione os pontos A e B para calcular a rota.</span>
-    </div>
-  </main>
-
-</div>
-
-<script>
-// ============================================================
-// CAMADA DE MODELO — GraphModel
-// Cada célula é um objeto rico, preparado para escalabilidade.
-// ============================================================
-class GraphModel {
-  constructor(rows, cols) {
-    this.rows = rows;
-    this.cols = cols;
-    this.nodes = [];
-    this._init();
+  /* ══════════════════════════════════════════════
+     2. FUNÇÕES DE DISTÂNCIA
+  ══════════════════════════════════════════════ */
+  function haversine(a, b) {
+    const R = 6371000; // raio da Terra em metros
+    const toRad = d => d * Math.PI / 180;
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const sinDLat = Math.sin(dLat / 2);
+    const sinDLng = Math.sin(dLng / 2);
+    const q = sinDLat * sinDLat +
+              Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) *
+              sinDLng * sinDLng;
+    return R * 2 * Math.atan2(Math.sqrt(q), Math.sqrt(1 - q));
   }
 
-  _init() {
-    this.nodes = [];
-    for (let r = 0; r < this.rows; r++) {
-      this.nodes[r] = [];
-      for (let c = 0; c < this.cols; c++) {
-        this.nodes[r][c] = this._createNode(r, c);
-      }
-    }
+  /* Calcula peso (distância em metros) de cada aresta */
+  edges.forEach(e => {
+    const src = nodes.find(n => n.id === e.source);
+    const tgt = nodes.find(n => n.id === e.target);
+    e.weight = haversine(src, tgt);
+  });
+
+  /* ══════════════════════════════════════════════
+     3. MOTOR A*
+  ══════════════════════════════════════════════ */
+  function buildAdjacency() {
+    const adj = {};
+    nodes.forEach(n => { adj[n.id] = []; });
+    edges.forEach(e => {
+      if (e.isBlocked) return;
+      adj[e.source].push({ to: e.target, cost: e.weight });
+      adj[e.target].push({ to: e.source, cost: e.weight }); // bidirecional
+    });
+    return adj;
+  }
+
+  function heuristic(nodeId, goalId) {
+    const a = nodes.find(n => n.id === nodeId);
+    const b = nodes.find(n => n.id === goalId);
+    return haversine(a, b);
   }
 
   /**
-   * Fábrica de nó.
-   * Adicione futuros atributos aqui (ex: terrain, zone, maxSpeed).
+   * A* — retorna { path: [nodeId,...], totalDistance: meters } ou null
    */
-  _createNode(r, c) {
-    return {
-      x: c,
-      y: r,
-      isBlocked: false,
-      weight: 1,              // custo base (lido pelo AStarEngine via vehicleWeightFn)
-      currentTraffic: [],     // veículos presentes — altera weight temporariamente
-      vehicleType: null,      // tipo de veículo atribuído (extensão futura)
-      metadata: {}            // campo livre para extensões (zona, turno, etc.)
-    };
-  }
+  function aStar(startId, goalId) {
+    if (startId === goalId) return { path: [startId], totalDistance: 0 };
 
-  getNode(r, c) {
-    if (r < 0 || r >= this.rows || c < 0 || c >= this.cols) return null;
-    return this.nodes[r][c];
-  }
+    const adj = buildAdjacency();
 
-  setBlocked(r, c, blocked) {
-    const n = this.getNode(r, c);
-    if (n) n.isBlocked = blocked;
-  }
+    // MinHeap simples via array ordenado
+    const open = [{ id: startId, f: 0 }];
+    const gScore = {};
+    const cameFrom = {};
 
-  /**
-   * Vizinhos válidos (4-conectividade).
-   * Altere para 8 se precisar de diagonais.
-   */
-  getNeighbors(r, c) {
-    return [[-1,0],[1,0],[0,-1],[0,1]]
-      .map(([dr, dc]) => this.getNode(r + dr, c + dc))
-      .filter(n => n !== null && !n.isBlocked);
-  }
-
-  resize(rows, cols) {
-    const old = this.nodes;
-    const oldRows = this.rows;
-    const oldCols = this.cols;
-    this.rows = rows;
-    this.cols = cols;
-    this._init();
-    for (let r = 0; r < Math.min(rows, oldRows); r++)
-      for (let c = 0; c < Math.min(cols, oldCols); c++) {
-        this.nodes[r][c].isBlocked = old[r][c].isBlocked;
-        this.nodes[r][c].weight    = old[r][c].weight;
-      }
-  }
-
-  countBlocked() {
-    let n = 0;
-    for (let r = 0; r < this.rows; r++)
-      for (let c = 0; c < this.cols; c++)
-        if (this.nodes[r][c].isBlocked) n++;
-    return n;
-  }
-}
-
-// ============================================================
-// CAMADA DE ROTEAMENTO — AStarEngine
-// Puro JS, zero dependências, zero conhecimento de UI.
-// ============================================================
-class AStarEngine {
-
-  /** Heurística admissível: distância Manhattan */
-  static heuristic(ar, ac, br, bc) {
-    return Math.abs(ar - br) + Math.abs(ac - bc);
-  }
-
-  /**
-   * Calcula rota A* de (startR,startC) até (endR,endC).
-   *
-   * @param {GraphModel} graph
-   * @param {number} startR / startC — célula de origem
-   * @param {number} endR   / endC   — célula de destino
-   * @param {Function|null} vehicleWeightFn — (node) => number
-   *   Extensão para múltiplos tipos de veículo:
-   *   ex: (n) => n.weight + n.currentTraffic.length * 0.5
-   *
-   * @returns {{ path: [r,c][], visited: [r,c][] } | null}
-   */
-  static findPath(graph, startR, startC, endR, endC, vehicleWeightFn = null) {
-    const key = (r, c) => r * 10000 + c;
-
-    // Min-heap via array + sort (adequado para grids ≤ 50×50)
-    const open      = [];
-    const gScore    = new Map();
-    const cameFrom  = new Map();
-    const closedSet = new Set();
-    const visitedOrder = [];
-
-    const sk = key(startR, startC);
-    gScore.set(sk, 0);
-    const h0 = AStarEngine.heuristic(startR, startC, endR, endC);
-    open.push({ r: startR, c: startC, f: h0 });
+    nodes.forEach(n => { gScore[n.id] = Infinity; });
+    gScore[startId] = 0;
 
     while (open.length > 0) {
       open.sort((a, b) => a.f - b.f);
-      const { r, c } = open.shift();
-      const ck = key(r, c);
+      const { id: current } = open.shift();
 
-      if (r === endR && c === endC) {
-        // Reconstrói caminho via backtracking
+      if (current === goalId) {
+        // reconstruir caminho
         const path = [];
-        let cur = ck;
-        while (cameFrom.has(cur)) {
-          path.unshift([Math.floor(cur / 10000), cur % 10000]);
-          cur = cameFrom.get(cur);
+        let cur = goalId;
+        while (cur !== undefined) {
+          path.unshift(cur);
+          cur = cameFrom[cur];
         }
-        path.unshift([startR, startC]);
-        return { path, visited: visitedOrder };
+        const totalDistance = gScore[goalId];
+        return { path, totalDistance };
       }
 
-      if (closedSet.has(ck)) continue;
-      closedSet.add(ck);
-      visitedOrder.push([r, c]);
-
-      for (const neighbor of graph.getNeighbors(r, c)) {
-        const nr = neighbor.y;
-        const nc = neighbor.x;
-        const nk = key(nr, nc);
-        if (closedSet.has(nk)) continue;
-
-        // Custo de travessia: usa fn customizada se fornecida
-        const edgeCost = vehicleWeightFn
-          ? vehicleWeightFn(neighbor)
-          : neighbor.weight;
-
-        const tentativeG = (gScore.get(ck) || 0) + edgeCost;
-        if (tentativeG < (gScore.get(nk) ?? Infinity)) {
-          cameFrom.set(nk, ck);
-          gScore.set(nk, tentativeG);
-          const f = tentativeG + AStarEngine.heuristic(nr, nc, endR, endC);
-          open.push({ r: nr, c: nc, f });
+      for (const { to, cost } of adj[current]) {
+        const tentative = gScore[current] + cost;
+        if (tentative < gScore[to]) {
+          cameFrom[to] = current;
+          gScore[to] = tentative;
+          const f = tentative + heuristic(to, goalId);
+          const existing = open.find(o => o.id === to);
+          if (existing) existing.f = f;
+          else open.push({ id: to, f });
         }
       }
     }
     return null; // sem rota
   }
-}
 
-// ============================================================
-// CAMADA DE RENDERIZAÇÃO — GridRenderer
-// Responsável exclusivamente por desenhar no <canvas>.
-// Não conhece roteamento, não conhece eventos.
-// ============================================================
-class GridRenderer {
-  constructor(canvas) {
-    this.canvas   = canvas;
-    this.ctx      = canvas.getContext('2d');
-    this.cellSize = 28;
-  }
+  /* ══════════════════════════════════════════════
+     4. MAPA LEAFLET
+  ══════════════════════════════════════════════ */
+  const TMPM_CENTER = [-2.5650, -44.3740];
 
-  _computeCellSize(rows, cols) {
-    const area = document.getElementById('canvas-area');
-    const maxW = (area ? area.clientWidth  - 48 : 800);
-    const maxH = (area ? area.clientHeight - 48 : 600);
-    return Math.max(8, Math.min(52, Math.floor(Math.min(maxW / cols, maxH / rows))));
-  }
+  const map = L.map('map', {
+    center: TMPM_CENTER,
+    zoom: 16,
+    zoomControl: true,
+  });
 
-  render(graph, startR, startC, endR, endC, pathSet, visitedSet) {
-    const { rows, cols } = graph;
-    this.cellSize = this._computeCellSize(rows, cols);
-    const cs  = this.cellSize;
-    const ctx = this.ctx;
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    subdomains: 'abcd',
+    maxZoom: 20,
+  }).addTo(map);
 
-    this.canvas.width  = cols * cs;
-    this.canvas.height = rows * cs;
-    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const node    = graph.getNode(r, c);
-        const px      = c * cs;
-        const py      = r * cs;
-        const isStart = r === startR && c === startC;
-        const isEnd   = r === endR   && c === endC;
-        const inPath  = pathSet    ? pathSet.has(r * 10000 + c)    : false;
-        const visited = visitedSet ? visitedSet.has(r * 10000 + c) : false;
-
-        // --- Background da célula ---
-        if (node.isBlocked) {
-          // Obstáculo: cor escura + padrão hachura sutil
-          ctx.fillStyle = '#0a0c10';
-          ctx.fillRect(px, py, cs, cs);
-          ctx.strokeStyle = 'rgba(82,93,115,0.4)';
-          ctx.lineWidth = 0.5;
-          ctx.strokeRect(px + 2, py + 2, cs - 4, cs - 4);
-          // Mini-cruz para indicar bloqueio (visível acima de ~18px)
-          if (cs >= 16) {
-            ctx.strokeStyle = 'rgba(82,93,115,0.5)';
-            ctx.lineWidth = 1;
-            const m = cs / 2;
-            const d = cs * 0.22;
-            ctx.beginPath();
-            ctx.moveTo(px + m - d, py + m - d);
-            ctx.lineTo(px + m + d, py + m + d);
-            ctx.moveTo(px + m + d, py + m - d);
-            ctx.lineTo(px + m - d, py + m + d);
-            ctx.stroke();
-          }
-        } else if (isStart) {
-          ctx.fillStyle = '#1fcb8f';
-          ctx.fillRect(px, py, cs, cs);
-        } else if (isEnd) {
-          ctx.fillStyle = '#f5703a';
-          ctx.fillRect(px, py, cs, cs);
-        } else if (inPath) {
-          ctx.fillStyle = '#4a9eff';
-          ctx.fillRect(px, py, cs, cs);
-        } else if (visited) {
-          ctx.fillStyle = 'rgba(74,158,255,0.20)';
-          ctx.fillRect(px, py, cs, cs);
-        } else {
-          ctx.fillStyle = '#1a2030';
-          ctx.fillRect(px, py, cs, cs);
-        }
-
-        // --- Grid lines ---
-        ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-        ctx.lineWidth = 0.5;
-        ctx.strokeRect(px, py, cs, cs);
-
-        // --- Rótulo A / B ---
-        if ((isStart || isEnd) && cs >= 14) {
-          ctx.fillStyle = isStart ? '#0a1a10' : '#1a0a00';
-          ctx.font = `bold ${Math.max(10, Math.floor(cs * 0.42))}px 'Segoe UI', sans-serif`;
-          ctx.textAlign    = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(isStart ? 'A' : 'B', px + cs / 2, py + cs / 2);
-        }
-
-        // --- Indicador de peso elevado (extensão futura) ---
-        if (!node.isBlocked && !isStart && !isEnd && node.weight > 1 && cs >= 20) {
-          ctx.fillStyle = '#f5a623';
-          ctx.font = `${Math.floor(cs * 0.28)}px monospace`;
-          ctx.textAlign    = 'right';
-          ctx.textBaseline = 'top';
-          ctx.fillText(node.weight, px + cs - 2, py + 2);
-        }
-      }
-    }
-  }
-}
-
-// ============================================================
-// CAMADA DE CONTROLE — AppController
-// Orquestra Model + Engine + Renderer. Gerencia estado e UI.
-// ============================================================
-class AppController {
-  constructor() {
-    this.graph   = new GraphModel(20, 20);
-    this.renderer = new GridRenderer(document.getElementById('grid-canvas'));
-
-    this.startR = null; this.startC = null;
-    this.endR   = null; this.endC   = null;
-
-    this.currentTool = 'block';
-    this.isDragging  = false;
-
-    this.pathSet    = null;
-    this.visitedSet = null;
-
-    this._bindUI();
-    this._update();
-  }
-
-  // ----------------------------------------------------------
-  // EVENTOS DE UI
-  // ----------------------------------------------------------
-  _bindUI() {
-    const canvas = document.getElementById('grid-canvas');
-
-    // Slider de tamanho
-    const slider = document.getElementById('size-slider');
-    slider.addEventListener('input', () => {
-      const n = parseInt(slider.value, 10);
-      document.getElementById('size-label').textContent  = `${n}×${n}`;
-      document.getElementById('stat-grid').textContent   = `${n}×${n}`;
-      this.graph.resize(n, n);
-      if (this.startR !== null && (this.startR >= n || this.startC >= n))
-        this.startR = this.startC = null;
-      if (this.endR   !== null && (this.endR   >= n || this.endC   >= n))
-        this.endR   = this.endC   = null;
-      this._update();
+  /* ── Marcadores de nós ── */
+  nodes.forEach(node => {
+    const icon = L.divIcon({
+      className: '',
+      html: `<div class="node-marker-inner"></div>`,
+      iconSize: [10, 10],
+      iconAnchor: [5, 5],
     });
+    L.marker([node.lat, node.lng], { icon })
+      .addTo(map)
+      .bindTooltip(node.name, { permanent: false, direction: 'top', offset: [0, -8] });
+  });
 
-    // Botões de ferramenta
-    document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.currentTool = btn.dataset.tool;
-        // Remove todas as classes active-*
-        document.querySelectorAll('.tool-btn[data-tool]').forEach(b => {
-          b.className = 'tool-btn';
-        });
-        btn.classList.add(`active-${this.currentTool}`);
-      });
+  /* ── Polylines das arestas ── */
+  const edgePolylines = {};
+
+  edges.forEach(e => {
+    const src = nodes.find(n => n.id === e.source);
+    const tgt = nodes.find(n => n.id === e.target);
+    const line = L.polyline(
+      [[src.lat, src.lng], [tgt.lat, tgt.lng]],
+      { color: '#3388ff', weight: 6, opacity: 0.85 }
+    ).addTo(map);
+
+    line.on('click', () => onEdgeClick(e.id));
+    edgePolylines[e.id] = line;
+  });
+
+  /* ── Polyline da rota ── */
+  let routeLayer = null;
+
+  function drawRoute(path) {
+    if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+    if (!path || path.length < 2) return;
+    const latlngs = path.map(id => {
+      const n = nodes.find(n => n.id === id);
+      return [n.lat, n.lng];
     });
-
-    // Limpar tudo
-    document.getElementById('clear-btn').addEventListener('click', () => {
-      const { rows, cols } = this.graph;
-      this.graph = new GraphModel(rows, cols);
-      this.startR = this.startC = null;
-      this.endR   = this.endC   = null;
-      this._update();
-    });
-
-    // Canvas — mouse
-    canvas.addEventListener('mousedown', e => {
-      this.isDragging = true;
-      this._handleCell(e);
-    });
-    canvas.addEventListener('mousemove', e => {
-      if (this.isDragging && (this.currentTool === 'block' || this.currentTool === 'erase'))
-        this._handleCell(e);
-    });
-    canvas.addEventListener('mouseup',    () => { this.isDragging = false; });
-    canvas.addEventListener('mouseleave', () => { this.isDragging = false; });
-
-    // Canvas — touch (mobile)
-    canvas.addEventListener('touchstart', e => {
-      e.preventDefault();
-      this._handleCell(e.touches[0]);
-    }, { passive: false });
-    canvas.addEventListener('touchmove', e => {
-      e.preventDefault();
-      if (this.currentTool === 'block' || this.currentTool === 'erase')
-        this._handleCell(e.touches[0]);
-    }, { passive: false });
-
-    // Re-renderiza ao redimensionar janela
-    window.addEventListener('resize', () => this._update());
+    routeLayer = L.polyline(latlngs, {
+      color: '#00ff9d',
+      weight: 4,
+      opacity: 1,
+      interactive: false,   // não bloqueia cliques nas linhas azuis
+    }).addTo(map);
   }
 
-  _getCellFromEvent(e) {
-    const rect = this.renderer.canvas.getBoundingClientRect();
-    const cs   = this.renderer.cellSize;
-    const c = Math.floor((e.clientX - rect.left)  / cs);
-    const r = Math.floor((e.clientY - rect.top)   / cs);
-    if (r < 0 || r >= this.graph.rows || c < 0 || c >= this.graph.cols) return null;
-    return { r, c };
-  }
+  /* ══════════════════════════════════════════════
+     5. PAINEL — SELECTS
+  ══════════════════════════════════════════════ */
+  const selOrigin = document.getElementById('sel-origin');
+  const selDest   = document.getElementById('sel-dest');
+  const statusBar = document.getElementById('status-bar');
 
-  _handleCell(e) {
-    const cell = this._getCellFromEvent(e);
-    if (!cell) return;
-    const { r, c } = cell;
+  nodes.forEach(n => {
+    const o1 = new Option(n.name, n.id);
+    const o2 = new Option(n.name, n.id);
+    selOrigin.appendChild(o1);
+    selDest.appendChild(o2);
+  });
 
-    switch (this.currentTool) {
-      case 'start':
-        if (this.graph.getNode(r, c).isBlocked)  return;
-        if (r === this.endR && c === this.endC)   return;
-        this.startR = r; this.startC = c;
-        break;
-      case 'end':
-        if (this.graph.getNode(r, c).isBlocked)    return;
-        if (r === this.startR && c === this.startC) return;
-        this.endR = r; this.endC = c;
-        break;
-      case 'block':
-        if ((r === this.startR && c === this.startC) ||
-            (r === this.endR   && c === this.endC))   return;
-        this.graph.setBlocked(r, c, true);
-        break;
-      case 'erase':
-        this.graph.setBlocked(r, c, false);
-        break;
-    }
-    this._update();
-  }
+  // Padrão: origem = 0, destino = 7
+  selOrigin.value = 0;
+  selDest.value   = 7;
 
-  // ----------------------------------------------------------
-  // CÁLCULO E RENDERIZAÇÃO
-  // ----------------------------------------------------------
-  _computeRoute() {
-    this.pathSet    = null;
-    this.visitedSet = null;
+  function runRouting() {
+    const startId = parseInt(selOrigin.value);
+    const goalId  = parseInt(selDest.value);
 
-    const statusbar = document.getElementById('statusbar');
-    const statusText = document.getElementById('status-text');
-
-    if (this.startR === null || this.endR === null) {
-      statusbar.className = 'info';
-      statusText.textContent = 'Defina os pontos A e B clicando no grid.';
-      document.getElementById('stat-dist').textContent    = '—';
-      document.getElementById('stat-visited').textContent = '—';
-      document.getElementById('stat-blocked').textContent = this.graph.countBlocked();
+    if (startId === goalId) {
+      setStatus('SELECIONE NÓS DIFERENTES', 'err');
+      drawRoute(null);
       return;
     }
 
-    const result = AStarEngine.findPath(
-      this.graph,
-      this.startR, this.startC,
-      this.endR,   this.endC
-      // Passe vehicleWeightFn aqui para habilitar rotas por tipo de veículo
-    );
+    const result = aStar(startId, goalId);
 
-    document.getElementById('stat-blocked').textContent = this.graph.countBlocked();
-
-    if (result) {
-      this.pathSet    = new Set(result.path.map(([r, c]) => r * 10000 + c));
-      this.visitedSet = new Set(result.visited.map(([r, c]) => r * 10000 + c));
-      document.getElementById('stat-dist').textContent    = result.path.length - 1;
-      document.getElementById('stat-visited').textContent = result.visited.length;
-      statusbar.className  = 'ok';
-      statusText.textContent =
-        `Rota encontrada — ${result.path.length - 1} células | ${result.visited.length} nós explorados pelo A*.`;
-    } else {
-      document.getElementById('stat-dist').textContent    = '—';
-      document.getElementById('stat-visited').textContent = '—';
-      statusbar.className  = 'err';
-      statusText.textContent = 'Sem rota disponível — caminho completamente bloqueado.';
+    if (!result) {
+      setStatus('ROTA INDISPONÍVEL', 'err');
+      drawRoute(null);
+      alert('Rota indisponível');
+      return;
     }
+
+    const { path, totalDistance } = result;
+    // totalDistance está calculado e estruturado — pronto para uso futuro na UI
+    // console.log(`Distância total: ${totalDistance.toFixed(0)} m`);
+
+    drawRoute(path);
+    setStatus(`ROTA · ${path.length} NÓS · ${totalDistance.toFixed(0)} m`, 'ok');
   }
 
-  _update() {
-    this._computeRoute();
-    this.renderer.render(
-      this.graph,
-      this.startR, this.startC,
-      this.endR,   this.endC,
-      this.pathSet,
-      this.visitedSet
-    );
+  function setStatus(msg, cls) {
+    statusBar.textContent = msg;
+    statusBar.className = cls;
   }
-}
 
-// Inicializa a aplicação
-const app = new AppController();
-</script>
+  selOrigin.addEventListener('change', runRouting);
+  selDest.addEventListener('change', runRouting);
 
+  /* ══════════════════════════════════════════════
+     6. BLOQUEIO DINÂMICO DE ARESTAS
+  ══════════════════════════════════════════════ */
+  function onEdgeClick(edgeId) {
+    const edge = edges.find(e => e.id === edgeId);
+    const line = edgePolylines[edgeId];
+    if (!edge || !line) return;
+
+    edge.isBlocked = !edge.isBlocked;
+    line.setStyle({
+      color: edge.isBlocked ? '#ff3d57' : '#3388ff',
+      opacity: edge.isBlocked ? 0.9 : 0.85,
+    });
+
+    runRouting();
+  }
+
+  /* ══════════════════════════════════════════════
+     7. INICIALIZAÇÃO
+  ══════════════════════════════════════════════ */
+  runRouting();
+  </script>
 </body>
 </html>

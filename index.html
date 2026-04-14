@@ -128,9 +128,31 @@
       padding-top: 2px;
     }
 
-    #status-bar.ok { color: var(--accent2); }
-    #status-bar.err { color: var(--danger); }
+    #status-bar.ok   { color: var(--accent2); }
+    #status-bar.err  { color: var(--danger); }
     #status-bar.idle { color: var(--muted); }
+
+    /* ── CLEAR BUTTON ── */
+    #btn-clear {
+      width: 100%;
+      background: rgba(255, 61, 87, 0.08);
+      border: 1px solid rgba(255, 61, 87, 0.35);
+      border-radius: 3px;
+      color: var(--danger);
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      padding: 8px 10px;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+      outline: none;
+    }
+
+    #btn-clear:hover {
+      background: rgba(255, 61, 87, 0.18);
+      border-color: var(--danger);
+    }
 
     /* ── LEGEND ── */
     #legend {
@@ -163,6 +185,15 @@
       width: 28px;
       height: 3px;
       border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .leg-circle {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #111;
+      border: 2px solid #555;
       flex-shrink: 0;
     }
 
@@ -203,7 +234,7 @@
     /* ── PULSE NODE ── */
     @keyframes pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.6; transform: scale(1.3); }
+      50%       { opacity: 0.6; transform: scale(1.3); }
     }
 
     .node-marker-inner {
@@ -237,6 +268,7 @@
       </div>
       <div id="divider"></div>
       <div id="status-bar" class="idle">AGUARDANDO SELEÇÃO…</div>
+      <button id="btn-clear">⊗ Limpar Bloqueios</button>
     </div>
   </div>
 
@@ -244,70 +276,192 @@
     <div class="leg-item"><div class="leg-line" style="background:#3388ff"></div>Via livre</div>
     <div class="leg-item"><div class="leg-line" style="background:#ff3d57"></div>Via bloqueada</div>
     <div class="leg-item"><div class="leg-line" style="background:#00ff9d"></div>Rota calculada</div>
+    <div class="leg-item"><div class="leg-circle"></div>Interdição (clique)</div>
   </div>
 
   <script>
-  /* ══════════════════════════════════════════════
+  /* ══════════════════════════════════════════════════════════════════
      1. GRAFO GEOGRÁFICO — TMPM, São Luís / MA
-     Coordenadas mockadas dentro do perímetro do
-     Terminal Marítimo de Ponta da Madeira
-  ══════════════════════════════════════════════ */
+     Nós posicionados nos cruzamentos/pontos-chave do terminal.
+     Arestas com waypoints intermediários para seguir as vias reais.
+  ══════════════════════════════════════════════════════════════════ */
+
   const nodes = [
-    { id: 0, name: 'Portaria Principal',     lat: -2.5645, lng: -44.3785 },
-    { id: 1, name: 'Pátio de Triagem',       lat: -2.5652, lng: -44.3762 },
-    { id: 2, name: 'Cais Norte',             lat: -2.5630, lng: -44.3748 },
-    { id: 3, name: 'Cais Sul',               lat: -2.5672, lng: -44.3745 },
-    { id: 4, name: 'Área de Manutenção',     lat: -2.5660, lng: -44.3720 },
-    { id: 5, name: 'Silo de Minério A',      lat: -2.5640, lng: -44.3700 },
-    { id: 6, name: 'Silo de Minério B',      lat: -2.5665, lng: -44.3695 },
-    { id: 7, name: 'Ponto de Embarque',      lat: -2.5648, lng: -44.3670 },
+    { id: 0, name: 'Portaria Principal',  lat: -2.5628, lng: -44.3812 },
+    { id: 1, name: 'Pátio de Triagem',    lat: -2.5635, lng: -44.3778 },
+    { id: 2, name: 'Acesso Píer I',       lat: -2.5618, lng: -44.3748 },
+    { id: 3, name: 'Cais / Píer I',       lat: -2.5600, lng: -44.3730 },
+    { id: 4, name: 'Bifurcação Central',  lat: -2.5648, lng: -44.3748 },
+    { id: 5, name: 'Acesso Píer III',     lat: -2.5658, lng: -44.3718 },
+    { id: 6, name: 'Cais / Píer III',     lat: -2.5645, lng: -44.3695 },
+    { id: 7, name: 'Acesso Píer IV',      lat: -2.5672, lng: -44.3710 },
+    { id: 8, name: 'Cais / Píer IV',      lat: -2.5668, lng: -44.3685 },
+    { id: 9, name: 'Pátio de Silos',      lat: -2.5660, lng: -44.3660 },
   ];
 
+  /*
+   * Cada aresta possui um array `waypoints` com coordenadas intermediárias
+   * que fazem a polyline seguir as vias reais do TMPM em vez de cortar em
+   * linha reta por edificações ou pelo mar.
+   * Os nós source/target são automaticamente incluídos como primeiro e último
+   * ponto — waypoints contém apenas os pontos do meio.
+   */
   const edges = [
-    { id: 0, source: 0, target: 1, isBlocked: false },
-    { id: 1, source: 1, target: 2, isBlocked: false },
-    { id: 2, source: 1, target: 3, isBlocked: false },
-    { id: 3, source: 2, target: 4, isBlocked: false },
-    { id: 4, source: 3, target: 4, isBlocked: false },
-    { id: 5, source: 4, target: 5, isBlocked: false },
-    { id: 6, source: 4, target: 6, isBlocked: false },
-    { id: 7, source: 5, target: 7, isBlocked: false },
-    { id: 8, source: 6, target: 7, isBlocked: false },
-    { id: 9, source: 2, target: 3, isBlocked: false },
-    { id:10, source: 5, target: 6, isBlocked: false },
+    {
+      // Portaria → Pátio de Triagem  (via principal de entrada, curva N→L)
+      id: 0, source: 0, target: 1,
+      waypoints: [
+        { lat: -2.5629, lng: -44.3803 },
+        { lat: -2.5631, lng: -44.3790 },
+      ],
+    },
+    {
+      // Pátio de Triagem → Bifurcação Central  (eixo viário interno)
+      id: 1, source: 1, target: 4,
+      waypoints: [
+        { lat: -2.5638, lng: -44.3768 },
+        { lat: -2.5643, lng: -44.3758 },
+      ],
+    },
+    {
+      // Bifurcação Central → Acesso Píer I  (rampa norte, contorna edificações)
+      id: 2, source: 4, target: 2,
+      waypoints: [
+        { lat: -2.5641, lng: -44.3752 },
+        { lat: -2.5630, lng: -44.3750 },
+      ],
+    },
+    {
+      // Acesso Píer I → Cais Píer I  (descida ao cais)
+      id: 3, source: 2, target: 3,
+      waypoints: [
+        { lat: -2.5610, lng: -44.3740 },
+      ],
+    },
+    {
+      // Bifurcação Central → Acesso Píer III  (via sul, desvia do pátio central)
+      id: 4, source: 4, target: 5,
+      waypoints: [
+        { lat: -2.5651, lng: -44.3742 },
+        { lat: -2.5655, lng: -44.3730 },
+      ],
+    },
+    {
+      // Acesso Píer III → Cais Píer III
+      id: 5, source: 5, target: 6,
+      waypoints: [
+        { lat: -2.5653, lng: -44.3707 },
+      ],
+    },
+    {
+      // Acesso Píer III → Acesso Píer IV  (trecho de ligação entre píeres)
+      id: 6, source: 5, target: 7,
+      waypoints: [
+        { lat: -2.5663, lng: -44.3715 },
+        { lat: -2.5668, lng: -44.3712 },
+      ],
+    },
+    {
+      // Acesso Píer IV → Cais Píer IV
+      id: 7, source: 7, target: 8,
+      waypoints: [
+        { lat: -2.5670, lng: -44.3698 },
+      ],
+    },
+    {
+      // Cais Píer III → Pátio de Silos  (corredor de silos)
+      id: 8, source: 6, target: 9,
+      waypoints: [
+        { lat: -2.5648, lng: -44.3678 },
+        { lat: -2.5653, lng: -44.3668 },
+      ],
+    },
+    {
+      // Cais Píer IV → Pátio de Silos
+      id: 9, source: 8, target: 9,
+      waypoints: [
+        { lat: -2.5665, lng: -44.3672 },
+      ],
+    },
+    {
+      // Pátio de Triagem → Acesso Píer III  (atalho interno, margeia pátio)
+      id: 10, source: 1, target: 5,
+      waypoints: [
+        { lat: -2.5640, lng: -44.3765 },
+        { lat: -2.5647, lng: -44.3748 },
+        { lat: -2.5655, lng: -44.3733 },
+      ],
+    },
   ];
 
   /* ══════════════════════════════════════════════
      2. FUNÇÕES DE DISTÂNCIA
   ══════════════════════════════════════════════ */
+
   function haversine(a, b) {
-    const R = 6371000; // raio da Terra em metros
+    const R    = 6371000;
     const toRad = d => d * Math.PI / 180;
-    const dLat = toRad(b.lat - a.lat);
-    const dLng = toRad(b.lng - a.lng);
+    const dLat  = toRad(b.lat - a.lat);
+    const dLng  = toRad(b.lng - a.lng);
     const sinDLat = Math.sin(dLat / 2);
     const sinDLng = Math.sin(dLng / 2);
     const q = sinDLat * sinDLat +
-              Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) *
-              sinDLng * sinDLng;
+              Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinDLng * sinDLng;
     return R * 2 * Math.atan2(Math.sqrt(q), Math.sqrt(1 - q));
   }
 
-  /* Calcula peso (distância em metros) de cada aresta */
-  edges.forEach(e => {
+  /**
+   * Retorna a lista completa de pontos de uma aresta:
+   * [source_node, ...waypoints, target_node]
+   */
+  function edgeAllPoints(e) {
     const src = nodes.find(n => n.id === e.source);
     const tgt = nodes.find(n => n.id === e.target);
-    e.weight = haversine(src, tgt);
-  });
+    return [src, ...(e.waypoints || []), tgt];
+  }
+
+  /**
+   * Comprimento total da aresta somando todos os segmentos intermediários.
+   */
+  function edgeLength(e) {
+    const pts = edgeAllPoints(e);
+    let dist = 0;
+    for (let i = 0; i < pts.length - 1; i++) dist += haversine(pts[i], pts[i + 1]);
+    return dist;
+  }
+
+  /* Pré-calcula o peso (distância real via waypoints) de cada aresta */
+  edges.forEach(e => { e.weight = edgeLength(e); });
 
   /* ══════════════════════════════════════════════
-     3. MOTOR A*
+     3. INTERDIÇÕES — "BOLAS PRETAS"
   ══════════════════════════════════════════════ */
+
+  const BLOCK_RADIUS = 30; // metros
+
+  /** Array global de { circle: L.Circle, lat, lng } */
+  const blockCircles = [];
+
+  /** Verifica se o ponto {lat, lng} está dentro do raio de algum bloqueio ativo. */
+  function pointBlockedByCircle(pt) {
+    return blockCircles.some(b => haversine(pt, b) <= BLOCK_RADIUS);
+  }
+
+  /** Verifica se algum ponto da aresta (incluindo waypoints) está bloqueado. */
+  function edgeBlockedByCircles(e) {
+    return edgeAllPoints(e).some(pt => pointBlockedByCircle(pt));
+  }
+
+  /* ══════════════════════════════════════════════
+     4. MOTOR A*
+  ══════════════════════════════════════════════ */
+
   function buildAdjacency() {
     const adj = {};
     nodes.forEach(n => { adj[n.id] = []; });
     edges.forEach(e => {
-      if (e.isBlocked) return;
+      // Aresta ignorada se explicitamente bloqueada OU interceptada por círculo
+      if (e.isBlocked || edgeBlockedByCircles(e)) return;
       adj[e.source].push({ to: e.target, cost: e.weight });
       adj[e.target].push({ to: e.source, cost: e.weight }); // bidirecional
     });
@@ -320,17 +474,13 @@
     return haversine(a, b);
   }
 
-  /**
-   * A* — retorna { path: [nodeId,...], totalDistance: meters } ou null
-   */
+  /** A* — retorna { path: [nodeId,...], totalDistance: meters } ou null */
   function aStar(startId, goalId) {
     if (startId === goalId) return { path: [startId], totalDistance: 0 };
 
-    const adj = buildAdjacency();
-
-    // MinHeap simples via array ordenado
-    const open = [{ id: startId, f: 0 }];
-    const gScore = {};
+    const adj      = buildAdjacency();
+    const open     = [{ id: startId, f: 0 }];
+    const gScore   = {};
     const cameFrom = {};
 
     nodes.forEach(n => { gScore[n.id] = Infinity; });
@@ -341,42 +491,34 @@
       const { id: current } = open.shift();
 
       if (current === goalId) {
-        // reconstruir caminho
         const path = [];
         let cur = goalId;
-        while (cur !== undefined) {
-          path.unshift(cur);
-          cur = cameFrom[cur];
-        }
-        const totalDistance = gScore[goalId];
-        return { path, totalDistance };
+        while (cur !== undefined) { path.unshift(cur); cur = cameFrom[cur]; }
+        return { path, totalDistance: gScore[goalId] };
       }
 
       for (const { to, cost } of adj[current]) {
         const tentative = gScore[current] + cost;
         if (tentative < gScore[to]) {
           cameFrom[to] = current;
-          gScore[to] = tentative;
-          const f = tentative + heuristic(to, goalId);
+          gScore[to]   = tentative;
+          const f      = tentative + heuristic(to, goalId);
           const existing = open.find(o => o.id === to);
           if (existing) existing.f = f;
           else open.push({ id: to, f });
         }
       }
     }
-    return null; // sem rota
+    return null;
   }
 
   /* ══════════════════════════════════════════════
-     4. MAPA LEAFLET
+     5. MAPA LEAFLET
   ══════════════════════════════════════════════ */
-  const TMPM_CENTER = [-2.5650, -44.3740];
 
-  const map = L.map('map', {
-    center: TMPM_CENTER,
-    zoom: 16,
-    zoomControl: true,
-  });
+  const TMPM_CENTER = [-2.5640, -44.3750];
+
+  const map = L.map('map', { center: TMPM_CENTER, zoom: 16, zoomControl: true });
 
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; OpenStreetMap &copy; CARTO',
@@ -397,58 +539,95 @@
       .bindTooltip(node.name, { permanent: false, direction: 'top', offset: [0, -8] });
   });
 
-  /* ── Polylines das arestas ── */
+  /* ── Polylines das arestas (azuis) ── */
   const edgePolylines = {};
 
-  edges.forEach(e => {
-    const src = nodes.find(n => n.id === e.source);
-    const tgt = nodes.find(n => n.id === e.target);
-    const line = L.polyline(
-      [[src.lat, src.lng], [tgt.lat, tgt.lng]],
-      { color: '#3388ff', weight: 6, opacity: 0.85 }
-    ).addTo(map);
+  function buildEdgeLatLngs(e) {
+    return edgeAllPoints(e).map(p => [p.lat, p.lng]);
+  }
 
-    line.on('click', () => onEdgeClick(e.id));
+  edges.forEach(e => {
+    const line = L.polyline(buildEdgeLatLngs(e), {
+      color: '#3388ff',
+      weight: 6,
+      opacity: 0.85,
+    }).addTo(map);
     edgePolylines[e.id] = line;
   });
 
-  /* ── Polyline da rota ── */
+  /* ── Polyline da rota (verde) ── */
   let routeLayer = null;
 
+  /**
+   * Reconstrói a polyline verde seguindo os waypoints reais de cada aresta
+   * percorrida, na ordem correta (considera bidirecionalidade).
+   */
   function drawRoute(path) {
     if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
     if (!path || path.length < 2) return;
-    const latlngs = path.map(id => {
-      const n = nodes.find(n => n.id === id);
-      return [n.lat, n.lng];
-    });
+
+    const latlngs = [];
+
+    for (let i = 0; i < path.length - 1; i++) {
+      const fromId = path[i];
+      const toId   = path[i + 1];
+
+      const edge = edges.find(e =>
+        (e.source === fromId && e.target === toId) ||
+        (e.source === toId   && e.target === fromId)
+      );
+
+      if (!edge) continue;
+
+      // Monta a sequência de pontos na direção correta do percurso
+      let pts = edgeAllPoints(edge); // [source, ...waypoints, target]
+      if (edge.source !== fromId) pts = pts.slice().reverse();
+
+      // Evita duplicar o ponto de junção entre arestas consecutivas
+      const start = latlngs.length === 0 ? 0 : 1;
+      for (let j = start; j < pts.length; j++) {
+        latlngs.push([pts[j].lat, pts[j].lng]);
+      }
+    }
+
     routeLayer = L.polyline(latlngs, {
       color: '#00ff9d',
       weight: 4,
       opacity: 1,
-      interactive: false,   // não bloqueia cliques nas linhas azuis
+      interactive: false, // não bloqueia cliques no mapa abaixo
     }).addTo(map);
   }
 
+  /* ── Atualiza cor das linhas azuis conforme estado de bloqueio ── */
+  function refreshEdgeStyles() {
+    edges.forEach(e => {
+      const blocked = e.isBlocked || edgeBlockedByCircles(e);
+      edgePolylines[e.id].setStyle({
+        color:   blocked ? '#ff3d57' : '#3388ff',
+        opacity: blocked ? 0.90      : 0.85,
+      });
+    });
+  }
+
   /* ══════════════════════════════════════════════
-     5. PAINEL — SELECTS
+     6. PAINEL — SELECTS
   ══════════════════════════════════════════════ */
+
   const selOrigin = document.getElementById('sel-origin');
   const selDest   = document.getElementById('sel-dest');
   const statusBar = document.getElementById('status-bar');
 
   nodes.forEach(n => {
-    const o1 = new Option(n.name, n.id);
-    const o2 = new Option(n.name, n.id);
-    selOrigin.appendChild(o1);
-    selDest.appendChild(o2);
+    selOrigin.appendChild(new Option(n.name, n.id));
+    selDest.appendChild(new Option(n.name, n.id));
   });
 
-  // Padrão: origem = 0, destino = 7
   selOrigin.value = 0;
-  selDest.value   = 7;
+  selDest.value   = 9;
 
   function runRouting() {
+    refreshEdgeStyles();
+
     const startId = parseInt(selOrigin.value);
     const goalId  = parseInt(selDest.value);
 
@@ -468,40 +647,65 @@
     }
 
     const { path, totalDistance } = result;
-    // totalDistance está calculado e estruturado — pronto para uso futuro na UI
-    // console.log(`Distância total: ${totalDistance.toFixed(0)} m`);
-
+    // totalDistance estruturado para uso futuro na UI
     drawRoute(path);
     setStatus(`ROTA · ${path.length} NÓS · ${totalDistance.toFixed(0)} m`, 'ok');
   }
 
   function setStatus(msg, cls) {
     statusBar.textContent = msg;
-    statusBar.className = cls;
+    statusBar.className   = cls;
   }
 
   selOrigin.addEventListener('change', runRouting);
   selDest.addEventListener('change', runRouting);
 
   /* ══════════════════════════════════════════════
-     6. BLOQUEIO DINÂMICO DE ARESTAS
+     7. INTERDIÇÃO DINÂMICA — BOLA PRETA
   ══════════════════════════════════════════════ */
-  function onEdgeClick(edgeId) {
-    const edge = edges.find(e => e.id === edgeId);
-    const line = edgePolylines[edgeId];
-    if (!edge || !line) return;
 
-    edge.isBlocked = !edge.isBlocked;
-    line.setStyle({
-      color: edge.isBlocked ? '#ff3d57' : '#3388ff',
-      opacity: edge.isBlocked ? 0.9 : 0.85,
-    });
-
-    runRouting();
+  /**
+   * Retorna o índice do círculo de bloqueio cujo centro está dentro de
+   * BLOCK_RADIUS em relação ao ponto clicado; -1 se nenhum.
+   */
+  function findCircleAt(latlng) {
+    return blockCircles.findIndex(b => haversine(latlng, b) <= BLOCK_RADIUS);
   }
 
+  map.on('click', function (e) {
+    const clicked = { lat: e.latlng.lat, lng: e.latlng.lng };
+    const existing = findCircleAt(clicked);
+
+    if (existing !== -1) {
+      // Remove círculo existente (toggle)
+      map.removeLayer(blockCircles[existing].circle);
+      blockCircles.splice(existing, 1);
+    } else {
+      // Adiciona novo círculo de interdição
+      const circle = L.circle([clicked.lat, clicked.lng], {
+        radius:      BLOCK_RADIUS,
+        color:       '#444',
+        fillColor:   '#111',
+        fillOpacity: 0.85,
+        weight:      2,
+        interactive: false,
+      }).addTo(map);
+
+      blockCircles.push({ lat: clicked.lat, lng: clicked.lng, circle });
+    }
+
+    runRouting(); // recalcula imediatamente
+  });
+
+  /* ── Botão "Limpar Bloqueios" ── */
+  document.getElementById('btn-clear').addEventListener('click', () => {
+    blockCircles.forEach(b => map.removeLayer(b.circle));
+    blockCircles.length = 0;
+    runRouting();
+  });
+
   /* ══════════════════════════════════════════════
-     7. INICIALIZAÇÃO
+     8. INICIALIZAÇÃO
   ══════════════════════════════════════════════ */
   runRouting();
   </script>
